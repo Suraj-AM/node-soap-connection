@@ -13,7 +13,12 @@ let definitionsKey = '';
 let wsdlMessage = '';
 let wsdlTypes = '';
 
-async function getSoapMethods(wsdlUrl) {
+
+/* get methods from wsdl url
+* @param {URL} wsdlUrl
+* @return {array} soapMethods
+*/
+getSoapMethods = async (wsdlUrl) => {
     try {
         // Fetch the WSDL file content
         const response = await axios.get(wsdlUrl);
@@ -24,37 +29,37 @@ async function getSoapMethods(wsdlUrl) {
 
         // Find the appropriate prefix for "definitions"
         mainPrefix = getPrefix(wsdlObject, 'definitions');
-
-        // Find the SOAP methods defined in the WSDL
         definitionsKey = mainPrefix + 'definitions';
         const portTypeKey = mainPrefix + 'portType';
         const operationKey = mainPrefix + 'operation';
+
+        // Get port type, message and types from wsdl object
         const portType = wsdlObject[definitionsKey][portTypeKey][0][operationKey];
         wsdlMessage = wsdlObject[definitionsKey][mainPrefix + 'message'];
         wsdlTypes = wsdlObject[definitionsKey][mainPrefix + 'types'][0];
 
+        // Find the SOAP methods defined in the WSDL
         const soapMethods = portType.map(method => {
             const methodName = method.$.name;
             const input = method[mainPrefix + 'input'][0].$.message.split(":")[1];
             const output = method[mainPrefix + 'output'][0].$.message.split(":")[1];
             return { name: methodName, input: input, output: output };
         });
-        // const schemaPrefix = getPrefix(portType, 'schema');
-        // const soapSchema = portType[schemaPrefix + 'schema'][0];
-        // const arraySoapMethods = soapSchema[Object.keys(soapSchema).find(ele => ele != '$')];
-        // const soapMethods = arraySoapMethods.map(method => {
-        //     const pathToLastElement = buildPathToElements(method, schemaPrefix);
-        //     const elements = getElementAtPath(method, pathToLastElement);
-        //     return { name: method['$'].name, param: elements };
-        // });
 
         return soapMethods;
     } catch (error) {
         throw error;
     }
-}
+};
 
-function buildPathToElements(schemaElement, prefix, path = []) {
+
+/* get a path from object to the element key
+* @param {Object} schemaElement
+* @param {string} prefix
+* @param {array} path
+* @return {array} path
+*/
+buildPathToElements = (schemaElement, prefix, path = []) => {
     if (!schemaElement || typeof schemaElement !== 'object') {
         return path;
     }
@@ -76,24 +81,39 @@ function buildPathToElements(schemaElement, prefix, path = []) {
 
     const newPath = [...path, isNaN(Number(lastKey)) ? lastKey : Number(lastKey)];
     return buildPathToElements(schemaElement[lastKey], prefix, newPath);
-}
+};
 
-function getElementAtPath(schemaElement, path) {
+
+/* get element from object by path array
+* @param {Object} schemaElement
+* @param {array} path
+* @return {object} currentElement
+*/
+getElementAtPath = (schemaElement, path) => {
     let currentElement = schemaElement;
     for (const step of path) {
         currentElement = currentElement[step];
     }
     return currentElement;
-}
+};
 
 
+/* get prefix of string
+* @param {Object} object
+* @param {string} findingKey
+* @return {string} prefix
+*/
+getPrefix = (object, findingKey) => {
+    const prefix = Object.keys(object).filter(key => key.endsWith(findingKey))[0].split(":");
+    return prefix.length > 1 ? prefix[0] + ':' : '';
+};
 
-function getPrefix(object, findingKey) {
-    const prefixes = Object.keys(object).filter(key => key.endsWith(findingKey))[0].split(":");
-    return prefixes.length > 1 ? prefixes[0] + ':' : '';
-}
 
-function getMethodParameters(methodInput) {
+/* get element from method
+* @param {Object} methodInput
+* @return {object} elements
+*/
+getMethodParameters = (methodInput) => {
     const schemaName = getSchemaName(methodInput);
 
     const types = wsdlTypes;
@@ -106,17 +126,27 @@ function getMethodParameters(methodInput) {
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
     const elements = getElementAtPath(parameters, pathToLastElement);
     return elements;
-}
+};
 
-function getSchemaName(methodInput) {
+
+/* get schema for method
+* @param {Object} methodInput
+* @return {string} schemaName
+*/
+getSchemaName = (methodInput) => {
     const wsdlMessageCopy = [...wsdlMessage];
     const schema = wsdlMessageCopy.find(ele => ele.$.name == methodInput);
     const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
     return schemaName;
-}
+};
 
 
-async function createSoapRequest(wsdlUrl, operationName, operationParameters, inputParameters) {
+/* create soap envelope and get wsdlXmlns
+* @param {Object} methodInput
+* @return {string} soapEnvelope
+* @return {string} wsdlXmlns
+*/
+createSoapRequest = async (wsdlUrl, operationName, operationParameters, inputParameters) => {
     try {
         // Fetch the WSDL file content
         const response = await axios.get(wsdlUrl);
@@ -125,10 +155,6 @@ async function createSoapRequest(wsdlUrl, operationName, operationParameters, in
         // Parse the WSDL content
         const wsdlObject = await parser.parseStringPromise(wsdlContent);
         const wsdlXmlns = wsdlObject[definitionsKey]['$']['xmlns:tns'];
-
-        // // Find the input parameters of the selected method
-        // const selectedMethod = wsdlObject[definitionsKey][portTypeKey][0][prefix + 'operation'].find(method => method.$.name === operationName);
-        // const inputParameters = selectedMethod[prefix + 'input'][0].part ? selectedMethod.input[0].part.map(part => part.$) : '';
 
         // Construct the SOAP envelope with user-provided parameters
         const soapEnvelope = `
@@ -147,9 +173,15 @@ async function createSoapRequest(wsdlUrl, operationName, operationParameters, in
     } catch (error) {
         throw error;
     }
-}
+};
 
-function constructParameters(userParameters, inputParameters) {
+
+/* construct parameter for envelope
+* @param {object} userParameters
+* @param {object} inputParameters
+* @return {string} parameterString
+*/
+constructParameters = (userParameters, inputParameters) => {
     let parameterString = '';
 
     for (const param of inputParameters) {
@@ -160,7 +192,7 @@ function constructParameters(userParameters, inputParameters) {
     }
 
     return parameterString;
-}
+};
 
 
 // Example usage
@@ -195,6 +227,7 @@ getSoapMethods(wsdlUrl)
                 }
             }
 
+            // generate envelope for soap call
             const { soapEnvelope, wsdlXmlns } = await createSoapRequest(wsdlUrl, methodName, methodParameters, params);
             console.log('Generated SOAP Envelope:', soapEnvelope);
 
@@ -211,6 +244,7 @@ getSoapMethods(wsdlUrl)
                         if (error) {
                             console.error('Error parsing SOAP response:', error);
                         } else {
+                            // Find result key and body key for response object
                             const resultKey = getMethodParameters(selectedMethod.output)[0].$.name;
                             const resultBody = getSchemaName(selectedMethod.output);
                             console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0][resultBody][0][resultKey][0]));
@@ -225,8 +259,9 @@ getSoapMethods(wsdlUrl)
             const methodInfo = {
                 methodName: methodName,
                 parameters: methodParameters,
-                inputPart: params ? params : '' // Add the input part of the selected method
+                inputPart: params ? params : ''
             };
+
             console.log('Method Info:', methodInfo);
 
             rl.close();
