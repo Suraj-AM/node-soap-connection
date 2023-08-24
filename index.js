@@ -12,7 +12,8 @@ let mainPrefix = '';
 let definitionsKey = '';
 let wsdlMessage = '';
 let wsdlTypes = '';
-
+let arraySoapMethods = [];
+let schemaPrefix = '';
 
 /* get methods from wsdl url
 * @param {URL} wsdlUrl
@@ -37,6 +38,14 @@ getSoapMethods = async (wsdlUrl) => {
         const portType = wsdlObject[definitionsKey][portTypeKey][0][operationKey];
         wsdlMessage = wsdlObject[definitionsKey][mainPrefix + 'message'];
         wsdlTypes = wsdlObject[definitionsKey][mainPrefix + 'types'][0];
+
+        // Find the schema from wsdl file
+        schemaPrefix = getPrefix(types, 'schema');
+        const soapSchema = types[schemaPrefix + 'schema'][0];    
+        Object.keys(soapSchema).forEach(ele => {
+            if (ele != '$')
+                arraySoapMethods.push(...soapSchema[ele]);
+        });
 
         // Find the SOAP methods defined in the WSDL
         const soapMethods = portType.map(method => {
@@ -114,15 +123,10 @@ getPrefix = (object, findingKey) => {
 * @return {object} elements
 */
 getMethodParameters = (methodInput) => {
+    const types = wsdlTypes;
     const schemaName = getSchemaName(methodInput);
 
-    const types = wsdlTypes;
-
-    const schemaPrefix = getPrefix(types, 'schema');
-    const soapSchema = types[schemaPrefix + 'schema'][0];
-    const arraySoapMethods = soapSchema[Object.keys(soapSchema).find(ele => ele != '$')];
     const parameters = arraySoapMethods.find(ele => ele.$.name == schemaName);
-
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
     const elements = getElementAtPath(parameters, pathToLastElement);
     return elements;
@@ -134,10 +138,10 @@ getMethodParameters = (methodInput) => {
 * @return {string} schemaName
 */
 getSchemaName = (methodInput) => {
-    const wsdlMessageCopy = [...wsdlMessage];
-    const schema = wsdlMessageCopy.find(ele => ele.$.name == methodInput);
-    const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
-    return schemaName;
+        const wsdlMessageCopy = [...wsdlMessage];
+        const schema = wsdlMessageCopy.find(ele => ele.$.name == methodInput);
+        const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
+        return schemaName;
 };
 
 
@@ -159,7 +163,7 @@ createSoapRequest = async (wsdlUrl, operationName, operationParameters, inputPar
         // Construct the SOAP envelope with user-provided parameters
         const soapEnvelope = `
       <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="${wsdlXmlns}"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
         <soapenv:Header/>
         <soapenv:Body>
           <web:${operationName}>
@@ -183,14 +187,14 @@ createSoapRequest = async (wsdlUrl, operationName, operationParameters, inputPar
 */
 constructParameters = (userParameters, inputParameters) => {
     let parameterString = '';
-
-    for (const param of inputParameters) {
-        const paramName = param.$.name;
-        const paramType = param.$.type;
-        const userValue = userParameters[paramName];
-        parameterString += `<web:${paramName} xsi:type="${paramType}">${userValue}</web:${paramName}>`;
+    if (inputParameters) {
+        for (const param of inputParameters) {
+            const paramName = param.$.name;
+            const paramType = param.$.type;
+            const userValue = userParameters[paramName];
+            parameterString += `<web:${paramName} xsi:type="${paramType}">${userValue}</web:${paramName}>`;
+        }
     }
-
     return parameterString;
 };
 
@@ -244,10 +248,7 @@ getSoapMethods(wsdlUrl)
                         if (error) {
                             console.error('Error parsing SOAP response:', error);
                         } else {
-                            // Find result key and body key for response object
-                            const resultKey = getMethodParameters(selectedMethod.output)[0].$.name;
-                            const resultBody = getSchemaName(selectedMethod.output);
-                            console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0][resultBody][0][resultKey][0]));
+                            console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0],null,2));
                         }
                     });
                 })
