@@ -1,10 +1,11 @@
 {
   "name": "node-soap-connection",
   "version": "1.0.0",
-  "description": "program to read wsdl file from soap server and make connection on bassis on it",
+  "description": "program to read wsdl file from soap server and make connection on basis on it",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node index.js",
+    "dev": "node index.js"
   },
   "keywords": [],
   "author": "Suraj Kolhe",

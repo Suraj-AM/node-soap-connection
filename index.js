@@ -8,10 +8,11 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
+
+// global variable declaration
 let mainPrefix = '';
 let definitionsKey = '';
 let wsdlMessage = '';
-let wsdlTypes = '';
 let arraySoapMethods = [];
 let schemaPrefix = '';
 
@@ -37,11 +38,11 @@ getSoapMethods = async (wsdlUrl) => {
         // Get port type, message and types from wsdl object
         const portType = wsdlObject[definitionsKey][portTypeKey][0][operationKey];
         wsdlMessage = wsdlObject[definitionsKey][mainPrefix + 'message'];
-        wsdlTypes = wsdlObject[definitionsKey][mainPrefix + 'types'][0];
+        const wsdlTypes = wsdlObject[definitionsKey][mainPrefix + 'types'][0];
 
         // Find the schema from wsdl file
-        schemaPrefix = getPrefix(types, 'schema');
-        const soapSchema = types[schemaPrefix + 'schema'][0];    
+        schemaPrefix = getPrefix(wsdlTypes, 'schema');
+        const soapSchema = wsdlTypes[schemaPrefix + 'schema'][0];
         Object.keys(soapSchema).forEach(ele => {
             if (ele != '$')
                 arraySoapMethods.push(...soapSchema[ele]);
@@ -123,12 +124,17 @@ getPrefix = (object, findingKey) => {
 * @return {object} elements
 */
 getMethodParameters = (methodInput) => {
-    const types = wsdlTypes;
-    const schemaName = getSchemaName(methodInput);
-
-    const parameters = arraySoapMethods.find(ele => ele.$.name == schemaName);
+    let nameSchema = getSchemaName(methodInput);
+    if (!nameSchema) {
+        nameSchema = methodInput;
+    }
+    const parameters = arraySoapMethods.find(ele => ele.$.name == nameSchema);
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
+
     const elements = getElementAtPath(parameters, pathToLastElement);
+    if (elements) {
+        return getMethodParameters(elements[0].$.type.split(":").pop());
+    }
     return elements;
 };
 
@@ -138,10 +144,13 @@ getMethodParameters = (methodInput) => {
 * @return {string} schemaName
 */
 getSchemaName = (methodInput) => {
-        const wsdlMessageCopy = [...wsdlMessage];
-        const schema = wsdlMessageCopy.find(ele => ele.$.name == methodInput);
-        const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
-        return schemaName;
+    const wsdlMessageCopy = [...wsdlMessage];
+    const schema = wsdlMessageCopy.find(ele => ele.$.name == methodInput);
+    if (!schema) {
+        return;
+    }
+    const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
+    return schemaName;
 };
 
 
@@ -199,8 +208,9 @@ constructParameters = (userParameters, inputParameters) => {
 };
 
 
-// Example usage
-const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+// WSDL ULR
+// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
@@ -246,14 +256,16 @@ getSoapMethods(wsdlUrl)
                     // Parse the WSDL content
                     parser.parseString(response.data, (error, result) => {
                         if (error) {
-                            console.error('Error parsing SOAP response:', error);
+                            console.error('Error parsing SOAP response:', error.data);
                         } else {
-                            console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0],null,2));
+                            console.log("in result", getMethodParameters(selectedMethod.output));
+                            console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0], null, 2));
                         }
                     });
                 })
                 .catch(error => {
-                    console.error('Error making SOAP request:', error);
+                    console.error('Error making SOAP request: status:- ', error, error.response?.status);
+                    console.error('Error body:-', error.response?.data);
                 });
 
             // Add the method name, parameters, and input part to the same object
