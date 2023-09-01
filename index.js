@@ -251,22 +251,16 @@ getSoapMethods(wsdlUrl)
                     'Content-Type': 'text/xml',
                     'SOAPAction': wsdlXmlns + methodName
                 },
-            })
-                .then(async response => {
-                    // Parse the WSDL content
-                    parser.parseString(response.data, (error, result) => {
-                        if (error) {
-                            console.error('Error parsing SOAP response:', error.data);
-                        } else {
-                            console.log("in result", getMethodParameters(selectedMethod.output));
-                            console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0], null, 2));
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('Error making SOAP request: status:- ', error, error.response?.status);
-                    console.error('Error body:-', error.response?.data);
-                });
+            }).then(async response => {
+                // Parse the WSDL content
+                const result = await parser.parseStringPromise(response.data);
+                console.log("in result", getMethodParameters(selectedMethod.output));
+                console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0], null, 2));
+
+            }).catch(error => {
+                console.error('Error making SOAP request: status:- ', error, error.response?.status);
+                console.error('Error body:-', error.response?.data);
+            });
 
             // Add the method name, parameters, and input part to the same object
             const methodInfo = {

@@ -12,6 +12,9 @@ SOAP server provides wsdl file that defines all definitions of methods or API's.
 
 
 **XML** format doesn't have any special way to write like other formats.
+
+### WSDL File
+**wsdl** file contains all information about server and definitions of methods and their 	format
 **WSDL** file can written in any way.
 
 #### common keywords in WSDL file
@@ -37,8 +40,7 @@ like its encoding type, name, and several link that defines SOAP format of xml
 This link mainly seen in wsdl definitions tag.
 
 As xml does not have nay specific format so this tags may be contains prefix to it like **wsdl:definitions**. But in schema it may be different prefix.
-Like html xml have to close their tags as same html like
-> < wsdl:definition > < / wsdl:definition >
+Like html xml have to close their tags as same html like _< wsdl:definition > </wsdl:definition>_
 
 ### Make connection or call SOAP method
 We can make call using axios it takes **wsdl url** and for body we have to provide message in xml **envelope** 
@@ -70,19 +72,37 @@ First _**envelope**_ followed by _**header**_ and after it closed _**body**_ of 
 </SOAP_ENV:Envelope>
 ```
 
-##### Envelope:
+- **Envelope :**
 Defines the start and the end of the message. It is a mandatory element.
 
-##### Header:
+- **Header :**
 Contains any optional attributes of the message used in processing the message, either at an intermediary point or at the ultimate end-point. It is an optional element.
 
-##### Body:
+- **Body :**
 Contains the XML data comprising the message being sent. It is a mandatory element.
 
-##### Fault:
+- **Fault :**
 An optional Fault element that provides information about errors that occur while processing the message.
 IT will shows in response from server.
 		
 > Fault Code: It defines code of error on server
 
 > Fault Message: It defines message / reason for Fault or error
+
+### More about SOAP Envelope
+ - xmlns:SOAP-ENV = "http://www.w3.org/2001/12/soap-envelope"  
+ You might be see this as a link, But this link refer this part of xml is type of SOAP Envelope. You can actually visits their official website or this link to know more about schema of SOAP Envelope.
+
+ - SOAP-ENV:encodingStyle = "http://www.w3.org/2001/12/soap-encoding"   
+ As SOAP is specify  its own encoding style it must have to refer to its encoding schema.
+
+ - XMLNS:xsd="http://www.w3.org/2001/XMLSchema"     
+ The purpose of XML Schema: Structures is to define the nature of XML schemas and their component parts, provide an inventory of XML markup constructs with which to represent schemas, and define the application of schemas to XML documents.
+
+ - xmlns:web="___"   
+ You might be thinking like I must be missed something at here but no this link in web tag is different on the basis of every server. We will get it in _WSDL FILE_ as _tns tag_.  
+ Example :- xmlns:tns="http://tempuri.org/"
+
+> As like this you will get more link / tags in wsdl file and envelope also
+
+> You can visit that side to learn
