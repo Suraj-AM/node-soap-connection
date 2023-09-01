@@ -14,7 +14,7 @@ let wsdlObject;
 let mainPrefix = '';
 let definitionsKey = '';
 let wsdlMessage = '';
-let arraySoapMethods = [];
+let wsdlSchema = [];
 let schemaPrefix = '';
 
 /* get methods from wsdl url
@@ -46,7 +46,7 @@ getSoapMethods = async (wsdlUrl) => {
         const soapSchema = wsdlTypes[schemaPrefix + 'schema'][0];
         Object.keys(soapSchema).forEach(ele => {
             if (ele != '$') {
-                arraySoapMethods.push(...soapSchema[ele]);
+                wsdlSchema.push(...soapSchema[ele]);
             }
         });
 
@@ -131,19 +131,20 @@ getMethodParameters = async (methodInput) => {
     if (!nameSchema) {
         nameSchema = methodInput;
     }
+
     // find schema body
-    const parameters = arraySoapMethods.find(ele => ele.$.name == nameSchema);
+    const parameters = wsdlSchema.find(ele => ele.$.name == nameSchema);
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
 
     // fetch element at that path
     const elements = getElementAtPath(parameters, pathToLastElement);
 
-    if (elements) {
-        if (elements[0].$.type.includes('tns')) {
-            return await getMethodParameters(elements[0].$.type.split(":").pop());
-        }
+    if (elements && elements[0].$.type.includes('tns')) {
+        const nextMethodInput = elements[0].$.type.split(":").pop();
+        return await getMethodParameters(nextMethodInput);
     }
-    return elements;
+
+    return { params: elements, method: methodInput };
 };
 
 
@@ -158,6 +159,62 @@ getSchemaName = (methodInput) => {
     }
     const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
     return schemaName;
+};
+
+
+/* Get name of response from wsdl schema
+* @param {string} schemaName
+* @param {string} prefix - prefix of response
+* @return {string} response name
+*/
+getNameOfResponse = (schemaName, prefix) => {
+    const schema = wsdlSchema.find(ele => ele.$.name.endsWith(schemaName));
+    const path = buildPathToElements(schema, prefix);
+    const ele = getElementAtPath(schema, path);
+    return ele.$.name;
+};
+
+
+parseResponse = async (soapResponse, output) => {
+    // parse the SOAP response
+    const result = await parser.parseStringPromise(soapResponse.data);
+
+    // extract soap body from envelope
+    const resultBody = result['soap:Envelope']['soap:Body'][0];
+
+    // get result parameters and method name
+    const { params, method } = await getMethodParameters(output);
+
+    // find prefix of response elements
+    const ResultKeys = Object.keys(resultBody)[0];
+    const prefix = ResultKeys.includes(":") ? ResultKeys.split(":")[0] + ':' : '';
+
+    // get response name and response element name
+    const responseSchema = getSchemaName(output);
+    const responseElementName = getNameOfResponse(responseSchema, prefix);
+
+    // extract parameter name
+    const parameters = params.map(ele => ele.$.name);
+
+    // get result data from body
+    const resultData = resultBody[prefix + responseSchema][0][prefix + responseElementName][0][prefix + method];
+   
+    const jsonData = [];
+
+    // iterate through the result data
+    resultData.forEach(item => {
+        const convertedItem = {};
+        // iterate through the parameters array and extract values from the result
+        parameters.forEach(param => {
+            const paramName = prefix + param;
+            const paramValue = item[paramName][0];
+
+            convertedItem[param] = paramValue;
+        });
+
+        jsonData.push(convertedItem);
+    });
+    return jsonData;
 };
 
 
@@ -212,8 +269,8 @@ constructParameters = (userParameters, inputParameters) => {
 
 
 // WSDL ULR
-// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
-const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
+const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+// const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
@@ -228,7 +285,7 @@ getSoapMethods(wsdlUrl)
                 return;
             }
             // get parameters from wsdl file
-            const params = await getMethodParameters(selectedMethod.input);
+            const { params } = await getMethodParameters(selectedMethod.input);
 
             const methodParameters = {};
 
@@ -250,18 +307,17 @@ getSoapMethods(wsdlUrl)
             console.log('Generated SOAP Envelope:', soapEnvelope);
 
             // Make the SOAP request using axios
-            axios.post(wsdlUrl, soapEnvelope, {
+            await axios.post(wsdlUrl, soapEnvelope, {
                 headers: {
                     'Content-Type': 'text/xml',
                     'SOAPAction': wsdlXmlns + methodName
                 },
             }).then(async response => {
-                // Parse the WSDL content
-                const result = await parser.parseStringPromise(response.data);
-                console.log("in result", await getMethodParameters(selectedMethod.output));
-                console.log('Parsed SOAP Response:', JSON.stringify(result['soap:Envelope']['soap:Body'][0], null, 2));
+                const result = await parseResponse(response, selectedMethod.output);
+                console.log('Parsed SOAP Response:', JSON.stringify(result, null, 2));
 
             }).catch(error => {
+                console.log(error);
                 console.error('Error making SOAP request: status:- ', error.response?.status);
                 console.error('Error body:-', error.response?.data);
             });
@@ -269,8 +325,7 @@ getSoapMethods(wsdlUrl)
             // Add the method name, parameters, and input part to the same object
             const methodInfo = {
                 methodName: methodName,
-                parameters: methodParameters,
-                inputPart: params ? params : ''
+                parameters: methodParameters
             };
 
             console.log('Method Info:', methodInfo);
