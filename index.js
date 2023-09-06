@@ -268,8 +268,8 @@ const constructParameters = (userParameters, inputParameters) => {
 
 
 // WSDL ULR
-// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
-const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
+const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+// const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
@@ -302,7 +302,7 @@ getSoapMethods(wsdlUrl)
             }
 
             // generate envelope for soap call
-            const { soapEnvelope, wsdlXmlns } = await createSoapRequest(methodName, methodParameters, params);
+            const { soapEnvelope, wsdlXmlns } = createSoapRequest(methodName, methodParameters, params);
             console.log('Generated SOAP Envelope:', soapEnvelope);
 
             // Make the SOAP request using axios
@@ -312,8 +312,9 @@ getSoapMethods(wsdlUrl)
                     'SOAPAction': wsdlXmlns + methodName
                 },
             }).then(async response => {
+                console.log('SOAP Response:', response.data);
                 const result = await parseResponse(response, selectedMethod.output);
-                console.log('Parsed SOAP Response:', JSON.stringify(result, null, 2));
+                console.log('Parsed SOAP Response:',response.status, JSON.stringify(result, null, 2));
 
             }).catch(error => {
                 console.error('Error making SOAP request: status:- ', error.response?.status);
