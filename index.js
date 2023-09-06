@@ -260,7 +260,7 @@ const constructParameters = (userParameters, inputParameters) => {
             const paramName = param.name;
             const paramType = param.type;
             const userValue = userParameters[paramName];
-            parameterString += `<web:${paramName} xsi:type="${paramType}">${userValue}</web:${paramName}>`;
+            parameterString += `<web:${paramName} type="${paramType}">${userValue}</web:${paramName}>`;
         }
     }
     return parameterString;
@@ -268,8 +268,8 @@ const constructParameters = (userParameters, inputParameters) => {
 
 
 // WSDL ULR
-const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
-// const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
+// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
