@@ -12,7 +12,6 @@ const rl = readline.createInterface({
 // global variable declaration
 let wsdlObject;
 let mainPrefix = '';
-let definitionsKey = '';
 let wsdlMessage = '';
 let wsdlSchema = [];
 let schemaPrefix = '';
@@ -21,40 +20,41 @@ let schemaPrefix = '';
 * @param {URL} wsdlUrl
 * @return {array} soapMethods
 */
-getSoapMethods = async (wsdlUrl) => {
+const getSoapMethods = async (wsdlUrl) => {
     try {
         // Fetch the WSDL file content
         const response = await axios.get(wsdlUrl);
         const wsdlContent = response.data;
 
         // Parse the WSDL content
-        wsdlObject = await parser.parseStringPromise(wsdlContent);
+        wsdlObject = simplifyObject(await parser.parseStringPromise(wsdlContent));
 
         // Find the appropriate prefix for "definitions"
-        mainPrefix = getPrefix(wsdlObject, 'definitions');
+        mainPrefix = getPrefix(wsdlObject, 'portType');
         definitionsKey = mainPrefix + 'definitions';
         const portTypeKey = mainPrefix + 'portType';
         const operationKey = mainPrefix + 'operation';
 
         // Get port type, message and types from wsdl object
-        const portType = wsdlObject[definitionsKey][portTypeKey][0][operationKey];
-        wsdlMessage = wsdlObject[definitionsKey][mainPrefix + 'message'];
-        const wsdlTypes = wsdlObject[definitionsKey][mainPrefix + 'types'][0];
+        const portType = wsdlObject[portTypeKey][operationKey];
+        wsdlMessage = wsdlObject[mainPrefix + 'message'];
+        const soapSchema = wsdlObject[mainPrefix + 'types'];
 
         // Find the schema from wsdl file
-        schemaPrefix = getPrefix(wsdlTypes, 'schema');
-        const soapSchema = wsdlTypes[schemaPrefix + 'schema'][0];
-        Object.keys(soapSchema).forEach(ele => {
-            if (ele != '$') {
+        const schemaKeys = Object.keys(soapSchema);
+        const schemaFindingKey = schemaKeys.filter(ele => ele != '$');
+        schemaPrefix = getPrefix(soapSchema, schemaFindingKey[0]);
+        schemaKeys.forEach(ele => {
+            if (schemaFindingKey.includes(ele)) {
                 wsdlSchema.push(...soapSchema[ele]);
             }
         });
 
         // Find the SOAP methods defined in the WSDL
         const soapMethods = portType.map(method => {
-            const methodName = method.$.name;
-            const input = method[mainPrefix + 'input'][0].$.message.split(":")[1];
-            const output = method[mainPrefix + 'output'][0].$.message.split(":")[1];
+            const methodName = method.$;
+            const input = method[mainPrefix + 'input'].split(":").pop();
+            const output = method[mainPrefix + 'output'].split(":").pop();
             return { name: methodName, input: input, output: output };
         });
 
@@ -71,7 +71,7 @@ getSoapMethods = async (wsdlUrl) => {
 * @param {array} path
 * @return {array} path
 */
-buildPathToElements = (schemaElement, prefix, path = []) => {
+const buildPathToElements = (schemaElement, prefix, path = []) => {
     if (!schemaElement || typeof schemaElement !== 'object') {
         return path;
     }
@@ -81,8 +81,11 @@ buildPathToElements = (schemaElement, prefix, path = []) => {
         return path;
     }
 
-    if (keys.includes(prefix + 'element')) {
-        path.push(prefix + 'element');
+    if (keys.includes('type')) {
+        return path;
+    }
+
+    if (keys.every((element) => !isNaN(Number(element)))) {
         return path;
     }
 
@@ -96,12 +99,13 @@ buildPathToElements = (schemaElement, prefix, path = []) => {
 };
 
 
+
 /* get prefix of string
 * @param {Object} object
 * @param {string} findingKey
 * @return {string} prefix
 */
-getPrefix = (object, findingKey) => {
+const getPrefix = (object, findingKey) => {
     const prefix = Object.keys(object).filter(key => key.endsWith(findingKey))[0].split(":");
     return prefix.length > 1 ? prefix[0] + ':' : '';
 };
@@ -112,7 +116,7 @@ getPrefix = (object, findingKey) => {
 * @param {array} path
 * @return {object} currentElement
 */
-getElementAtPath = (schemaElement, path) => {
+const getElementAtPath = (schemaElement, path) => {
     let currentElement = schemaElement;
     for (const step of path) {
         currentElement = currentElement[step];
@@ -125,7 +129,7 @@ getElementAtPath = (schemaElement, path) => {
 * @param {Object} methodInput
 * @return {object} elements
 */
-getMethodParameters = async (methodInput) => {
+const getMethodParameters = async (methodInput) => {
     // get schema name
     let nameSchema = await getSchemaName(methodInput);
     if (!nameSchema) {
@@ -133,18 +137,29 @@ getMethodParameters = async (methodInput) => {
     }
 
     // find schema body
-    const parameters = wsdlSchema.find(ele => ele.$.name == nameSchema);
+    const parameters = wsdlSchema.find(ele => ele.$ == nameSchema);
+    if (!parameters) {
+        return { method: methodInput };
+    }
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
 
     // fetch element at that path
     const elements = getElementAtPath(parameters, pathToLastElement);
-
-    if (elements && elements[0].$.type.includes('tns')) {
-        const nextMethodInput = elements[0].$.type.split(":").pop();
-        return await getMethodParameters(nextMethodInput);
+    if (!elements) {
+        return { method: methodInput };
     }
+    const params = !Array.isArray(elements) ? [elements] : elements;
 
-    return { params: elements, method: methodInput };
+    if (params) {
+        params.forEach(async (element) => {
+            if (element && element.type.includes('tns')) {
+                const nextMethodInput = element.$.type.split(":").pop();
+                return await getMethodParameters(nextMethodInput);
+            }
+        });
+    };
+
+    return { params: params, method: methodInput };
 };
 
 
@@ -152,69 +167,53 @@ getMethodParameters = async (methodInput) => {
 * @param {Object} methodInput
 * @return {string} schemaName
 */
-getSchemaName = (methodInput) => {
-    const schema = wsdlMessage.find((ele) => ele.$.name == methodInput);
+const getSchemaName = (methodInput) => {
+    const schema = wsdlMessage.find((ele) => ele.$ == methodInput);
     if (!schema) {
         return;
     }
-    const schemaName = schema[mainPrefix + 'part'][0].$.element.split(":")[1];
+    const schemaName = schema[mainPrefix + 'part'].element.split(":").pop();
     return schemaName;
 };
 
 
-/* Get name of response from wsdl schema
-* @param {string} schemaName
-* @param {string} prefix - prefix of response
-* @return {string} response name
-*/
-getNameOfResponse = (schemaName, prefix) => {
-    const schema = wsdlSchema.find(ele => ele.$.name.endsWith(schemaName));
-    const path = buildPathToElements(schema, prefix);
-    const ele = getElementAtPath(schema, path);
-    return ele.$.name;
+const simplifyObject = (obj) => {
+    if (typeof obj === 'object' && !Array.isArray(obj)) {
+        const keys = Object.keys(obj);
+        if (keys.length === 1) {
+            return simplifyObject(obj[keys[0]]);
+        } else {
+            const result = {};
+            for (const key of keys) {
+                result[key] = simplifyObject(obj[key]);
+            }
+            return result;
+        }
+    } else if (Array.isArray(obj)) {
+        if (obj.length === 1) {
+            return simplifyObject(obj[0]);
+        } else {
+            return obj.map((item) => simplifyObject(item));
+        }
+    } else {
+        return obj;
+    }
 };
 
 
-parseResponse = async (soapResponse, output) => {
+
+const parseResponse = async (soapResponse, output) => {
     // parse the SOAP response
-    const result = await parser.parseStringPromise(soapResponse.data);
+    const result = simplifyObject(await parser.parseStringPromise(soapResponse.data));
 
     // extract soap body from envelope
-    const resultBody = result['soap:Envelope']['soap:Body'][0];
-
-    // get result parameters and method name
-    const { params, method } = await getMethodParameters(output);
-
-    // find prefix of response elements
-    const ResultKeys = Object.keys(resultBody)[0];
-    const prefix = ResultKeys.includes(":") ? ResultKeys.split(":")[0] + ':' : '';
-
-    // get response name and response element name
-    const responseSchema = getSchemaName(output);
-    const responseElementName = getNameOfResponse(responseSchema, prefix);
-
-    // extract parameter name
-    const parameters = params.map(ele => ele.$.name);
+    const resultBody = result['soap:Body'];
 
     // get result data from body
-    const resultData = resultBody[prefix + responseSchema][0][prefix + responseElementName][0][prefix + method];
-   
-    const jsonData = [];
-
-    // iterate through the result data
-    resultData.forEach(item => {
-        const convertedItem = {};
-        // iterate through the parameters array and extract values from the result
-        parameters.forEach(param => {
-            const paramName = prefix + param;
-            const paramValue = item[paramName][0];
-
-            convertedItem[param] = paramValue;
-        });
-
-        jsonData.push(convertedItem);
-    });
-    return jsonData;
+    const resultData = Object.fromEntries(
+        Object.entries(resultBody).filter(([key, value]) => key != '$')
+    );
+    return resultData;
 };
 
 
@@ -223,11 +222,11 @@ parseResponse = async (soapResponse, output) => {
 * @return {string} soapEnvelope
 * @return {string} wsdlXmlns
 */
-createSoapRequest = (operationName, operationParameters, inputParameters) => {
+const createSoapRequest = (operationName, operationParameters, inputParameters) => {
     try {
 
         // Parse the WSDL content
-        const wsdlXmlns = wsdlObject[definitionsKey]['$']['xmlns:tns'];
+        const wsdlXmlns = wsdlObject.$['xmlns:tns'];
 
         // Construct the SOAP envelope with user-provided parameters
         const soapEnvelope = `
@@ -254,12 +253,12 @@ createSoapRequest = (operationName, operationParameters, inputParameters) => {
 * @param {object} inputParameters
 * @return {string} parameterString
 */
-constructParameters = (userParameters, inputParameters) => {
+const constructParameters = (userParameters, inputParameters) => {
     let parameterString = '';
     if (inputParameters) {
         for (const param of inputParameters) {
-            const paramName = param.$.name;
-            const paramType = param.$.type;
+            const paramName = param.name;
+            const paramType = param.type;
             const userValue = userParameters[paramName];
             parameterString += `<web:${paramName} xsi:type="${paramType}">${userValue}</web:${paramName}>`;
         }
@@ -269,8 +268,8 @@ constructParameters = (userParameters, inputParameters) => {
 
 
 // WSDL ULR
-const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
-// const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
+// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
@@ -291,8 +290,8 @@ getSoapMethods(wsdlUrl)
 
             if (params) {
                 for (const param of params) {
-                    const paramName = param.$.name;
-                    const paramType = param.$.type;
+                    const paramName = param.name;
+                    const paramType = param.type;
                     const paramValue = await new Promise((resolve) => {
                         rl.question(`Enter value for parameter '${paramName}' (${paramType}): `, (value) => {
                             resolve(value);
@@ -317,7 +316,6 @@ getSoapMethods(wsdlUrl)
                 console.log('Parsed SOAP Response:', JSON.stringify(result, null, 2));
 
             }).catch(error => {
-                console.log(error);
                 console.error('Error making SOAP request: status:- ', error.response?.status);
                 console.error('Error body:-', error.response?.data);
             });
