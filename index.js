@@ -67,7 +67,7 @@ const getSoapMethods = async (wsdlUrl) => {
 
 
 /** 
- *get a path from object to the element key
+ * get a path from object to the element key
  * @param {Object} schemaElement
  * @param {string} prefix
  * @param {array} path
@@ -138,21 +138,24 @@ const getMethodParameters = (methodInput) => {
     // get schema name
     let nameSchema = getSchemaName(methodInput);
     if (!nameSchema) {
-        nameSchema = methodInput;
+        nameSchema = methodInput; // if method is not defined in wsdl message
     }
 
     // find schema body
     const parameters = wsdlSchema.find(ele => ele.$ == nameSchema);
     if (!parameters) {
-        return { method: methodInput };
+        return;
     }
+
+    // get element Path
     const pathToLastElement = buildPathToElements(parameters, schemaPrefix);
 
-    // fetch element at that path
+    // fetch element at path
     const elements = getElementAtPath(parameters, pathToLastElement);
     if (!elements) {
-        return { method: methodInput };
+        return;
     }
+
     const params = !Array.isArray(elements) ? [elements] : elements;
 
     if (params) {
@@ -164,7 +167,7 @@ const getMethodParameters = (methodInput) => {
         });
     };
 
-    return { params: params, method: methodInput };
+    return params;
 };
 
 
@@ -184,7 +187,7 @@ const getSchemaName = (methodInput) => {
 
 
 /**
- * 
+ * remove extra array from object
  * @param {Object} object 
  * @returns {Object} final object after parsing
  */
@@ -192,22 +195,34 @@ const simplifyObject = (object) => {
     if (typeof object === 'object' && !Array.isArray(object)) {
         const keys = Object.keys(object);
         if (keys.length === 1) {
+            // If only one key is available in object
             return simplifyObject(object[keys[0]]);
+
         } else {
             const result = {};
+
             for (const key of keys) {
                 result[key] = simplifyObject(object[key]);
             }
+
             return result;
         }
     } else if (Array.isArray(object)) {
-        if (obj.length === 1) {
-            return simplifyObject(obj[0]);
+
+        if (object.length === 1) {
+            /** 
+             * if array have only one value
+             * then remove array and assign that value to parent key 
+             */
+            return simplifyObject(object[0]);
+
         } else {
-            return obj.map((item) => simplifyObject(item));
+
+            return object.map((item) => simplifyObject(item));
+
         }
     } else {
-        return obj;
+        return object;
     }
 };
 
@@ -224,7 +239,7 @@ const parseResponse = async (soapResponse) => {
     // extract soap body from envelope
     const resultBody = result['soap:Body'];
 
-    // get result data from body
+    // filter '$' key from result
     const resultData = Object.fromEntries(
         Object.entries(resultBody).filter(([key, value]) => key != '$')
     );
@@ -242,7 +257,8 @@ const createSoapRequest = (operationName, operationParameters, inputParameters) 
     try {
 
         // Parse the WSDL content
-        const wsdlXmlns = wsdlObject.$['xmlns:tns'];
+        const tnsKey = Object.keys(wsdlObject.$).find(ele => ele.endsWith('tns'));
+        const wsdlXmlns = wsdlObject.$[tnsKey];
 
         // Construct the SOAP envelope with user-provided parameters
         const soapEnvelope = `
@@ -301,7 +317,7 @@ getSoapMethods(wsdlUrl)
                 return;
             }
             // get parameters from wsdl file
-            const { params } = await getMethodParameters(selectedMethod.input);
+            const params = await getMethodParameters(selectedMethod.input);
 
             const methodParameters = {};
 

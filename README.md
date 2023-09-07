@@ -40,7 +40,7 @@ like its encoding type, name, and several link that defines SOAP format of xml
 This link mainly seen in wsdl definitions tag.
 
 As xml does not have nay specific format so this tags may be contains prefix to it like **wsdl:definitions**. But in schema it may be different prefix.
-Like html xml have to close their tags as same html like _< wsdl:definition > </wsdl:definition>_
+Like html tags xml have to close their tags Ex. _< wsdl:definition > </wsdl:definition>_
 
 ### Make connection or call SOAP method
 We can make call using axios it takes **wsdl url** and for body we have to provide message in xml **envelope** 
