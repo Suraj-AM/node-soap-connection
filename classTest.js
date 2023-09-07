@@ -1,4 +1,4 @@
-const nodeSoapConnection = require('./class');
+const client = require('./class');
 
 // WSDL ULR
 const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
@@ -7,7 +7,6 @@ const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
 // Create an async function and invoke it
 (async () => {
     try {
-        const client = new nodeSoapConnection(wsdlUrl);
         await client.createClient(wsdlUrl);
 
         // Call the 'Add' SOAP method

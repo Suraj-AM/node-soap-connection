@@ -359,4 +359,4 @@ class nodeSoapConnection {
 
 
 // export class instance
-module.exports = nodeSoapConnection;
+module.exports = new nodeSoapConnection();
