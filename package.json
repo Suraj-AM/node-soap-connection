@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "node index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "class": "node classTest.js",
+    "module": "node moduleTest.js"
   },
   "keywords": [],
   "author": "Suraj Kolhe",

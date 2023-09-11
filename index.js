@@ -301,8 +301,8 @@ const constructParameters = (userParameters, inputParameters) => {
 
 
 // WSDL ULR
-// const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
-const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
+const wsdlUrl = 'http://www.dneonline.com/calculator.asmx?wsdl'; // WSDL URL
+// const wsdlUrl = 'http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL'; // WSDL URL
 
 getSoapMethods(wsdlUrl)
     .then(async (methods) => {
